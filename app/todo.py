@@ -1,56 +1,72 @@
-from fastapi import APIRouter, Path
-from .schemas import STodo, STodoItem
+from fastapi import APIRouter, Request, Path, Depends
+from fastapi.templating import Jinja2Templates
+from .schemas import Todo, TodoItem, TodoItems
 from .exceptions import TodoDoesNotExist, TodoDoesNotUpdated
 
 
-router = APIRouter()
+router = APIRouter(
+    # prefix="/",
+    tags=["Фронтенд"]
+)
 
 todo_list = []
 
-@router.post('/todo', status_code=201)
-async def add_todo(todo: STodo) -> dict:
+templates = Jinja2Templates(directory="app/templates/")
+
+
+# Добавить элемент
+@router.post("/todo")
+async def add_todo(request: Request, todo: Todo = Depends(Todo.as_form)):
+    todo.id = len(todo_list) + 1
     todo_list.append(todo)
-    return {"message": "Todo added successfuly"}
+    return templates.TemplateResponse("todo.html",{"request": request, "todos": todo_list})
 
 
-@router.get("/todo")
-async def retrive_todos() -> dict:
-    return {"todos": todo_list}
+# Получить все елементы
+@router.get("/todo", response_model=TodoItems)
+async def retrieve_todo(request: Request):
+    return templates.TemplateResponse("todo.html",{"request": request, "todos": todo_list})
 
 
-
+# Получить элемент
 @router.get("/todo/{todo_id}")
-async def get_single_todo(todo_id: int = Path(..., title="The ID of todo retrive")) -> dict:
+async def get_single_todo(request: Request, todo_id: int = Path(..., title="The ID of the todo to retrieve.")):
     for todo in todo_list:
         if todo.id == todo_id:
-            return {"todo": todo}
-    raise TodoDoesNotExist
-    
+            return templates.TemplateResponse("todo.html", {"request": request,"todo": todo})
+    return TodoDoesNotExist
 
+
+# Обновить элемент
 @router.put("/todo/{todo_id}")
-async def update_todo(
-    todo_data: STodoItem,
-    todo_id: int = Path(..., title="The of the the todo be updated")) -> dict:
+async def update_todo(request: Request, todo_data: TodoItem,
+                      todo_id: int = Path(..., title="The ID of the todo to be updated.")) -> dict:
     for todo in todo_list:
         if todo.id == todo_id:
             todo.item = todo_data.item
             return {
-            "message": "Todo updated successfully."
+                "message": "Todo updated successfully."
             }
+
     return TodoDoesNotUpdated
 
 
-@router.delete('/todo/{todo_id}')
-async def delete_single_todo(todo_id: int) -> dict:
+# Удалить элемент
+@router.delete("/todo/{todo_id}")
+async def delete_single_todo(request: Request, todo_id: int) -> dict:
     for index in range(len(todo_list)):
         todo = todo_list[index]
         if todo.id == todo_id:
             todo_list.pop(index)
-            return {"message": "Todo deleted successfuly!."}
+            return {
+                "message": "Todo deleted successfully."
+            }
     return TodoDoesNotExist
 
-
-@router.delete('/todo')
+# Удалить все элементы
+@router.delete("/todo")
 async def delete_all_todo() -> dict:
     todo_list.clear()
-    return {"message": "Todos deleted successfuly!."}
+    return {
+        "message": "Todos deleted successfully."
+    }
